@@ -1,21 +1,21 @@
 {
   "functions": {
-    "api/index.py": {
+    "index.py": {
       "runtime": "python3.9"
     }
   },
   "routes": [
     {
       "src": "/health",
-      "dest": "/api/index.py"
+      "dest": "/index.py"
     },
     {
       "src": "/extract",
-      "dest": "/api/index.py"
+      "dest": "/index.py"
     },
     {
       "src": "/(.*)",
-      "dest": "/api/index.py"
+      "dest": "/index.py"
     }
   ]
 }
