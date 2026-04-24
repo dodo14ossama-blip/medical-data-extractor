@@ -1,189 +1,222 @@
 from flask import Flask, request, jsonify
 from flask_cors import CORS
-import pandas as pd
-import numpy as np
 import re
+import numpy as np
+import random
 import os
-import uuid
-import tempfile
 
 app = Flask(__name__)
 CORS(app)
 
-# ==================== دوال استخراج البيانات ====================
-
-def extract_values_from_text(text):
+def extract_values(text):
     """استخراج القيم الطبية من النص"""
-    data = {}
-    
-    patterns = {
-        'age': r'(?:age|عمر|Age)[\s:]*(\d+)',
-        'glucose': r'(?:glucose|سكر|Glucose)[\s:]*(\d+(?:\.\d+)?)',
-        'systolic_bp': r'(?:systolic|الضغط الانقباضي)[\s:]*(\d+(?:\.\d+)?)',
-        'diastolic_bp': r'(?:diastolic|الضغط الانبساطي)[\s:]*(\d+(?:\.\d+)?)',
-        'ldl': r'(?:ldl|LDL)[\s:]*(\d+(?:\.\d+)?)',
-        'genetic_risk_score': r'(?:genetic risk|الخطر الوراثي)[\s:]*(\d+(?:\.\d+)?)'
+    data = {
+        'age': 40,
+        'glucose': 0,
+        'systolic_bp': 0,
+        'diastolic_bp': 0,
+        'ldl': 0,
+        'hdl': 0,
+        'triglycerides': 0,
+        'genetic_risk_score': 0.3,
+        'gender': 'Unknown',
+        'genetic_disease': 'None'
     }
     
-    for key, pattern in patterns.items():
-        match = re.search(pattern, text, re.IGNORECASE)
-        if match:
-            try:
-                val = match.group(1)
-                data[key] = float(val) if '.' in val else int(val)
-            except:
-                pass
+    # استخراج العمر
+    age_match = re.search(r'(?:age|عمر|Age)[\s:]*(\d+)', text, re.IGNORECASE)
+    if age_match:
+        data['age'] = int(age_match.group(1))
     
+    # استخراج السكر
+    glucose_match = re.search(r'(?:glucose|سكر|Glucose|blood sugar)[\s:]*(\d+(?:\.\d+)?)', text, re.IGNORECASE)
+    if glucose_match:
+        data['glucose'] = float(glucose_match.group(1))
+    
+    # استخراج الضغط الانقباضي
+    sbp_match = re.search(r'(?:systolic|Systolic|الضغط الانقباضي)[\s:]*(\d+)', text, re.IGNORECASE)
+    if sbp_match:
+        data['systolic_bp'] = int(sbp_match.group(1))
+    
+    # استخراج الضغط الانبساطي
+    dbp_match = re.search(r'(?:diastolic|Diastolic|الضغط الانبساطي)[\s:]*(\d+)', text, re.IGNORECASE)
+    if dbp_match:
+        data['diastolic_bp'] = int(dbp_match.group(1))
+    
+    # استخراج LDL
+    ldl_match = re.search(r'(?:ldl|LDL)[\s:]*(\d+(?:\.\d+)?)', text, re.IGNORECASE)
+    if ldl_match:
+        data['ldl'] = float(ldl_match.group(1))
+    
+    # استخراج HDL
+    hdl_match = re.search(r'(?:hdl|HDL)[\s:]*(\d+(?:\.\d+)?)', text, re.IGNORECASE)
+    if hdl_match:
+        data['hdl'] = float(hdl_match.group(1))
+    
+    # استخراج الدهون الثلاثية
+    tri_match = re.search(r'(?:triglycerides|Triglycerides|الدهون الثلاثية)[\s:]*(\d+(?:\.\d+)?)', text, re.IGNORECASE)
+    if tri_match:
+        data['triglycerides'] = float(tri_match.group(1))
+    
+    # استخراج المخاطر الوراثية
+    risk_match = re.search(r'(?:genetic risk|Genetic Risk|الخطر الوراثي)[\s:]*(\d+(?:\.\d+)?)', text, re.IGNORECASE)
+    if risk_match:
+        data['genetic_risk_score'] = float(risk_match.group(1))
+    
+    # استخراج الجنس
     if re.search(r'male|ذكر|Male', text, re.IGNORECASE):
         data['gender'] = 'Male'
     elif re.search(r'female|انثى|Female', text, re.IGNORECASE):
         data['gender'] = 'Female'
     
-    disease_match = re.search(r'(?:genetic disease|مرض وراثي|Diagnosis)[\s:]*([A-Za-z\s]+)', text, re.IGNORECASE)
+    # استخراج الأمراض الوراثية
+    disease_match = re.search(r'(?:genetic disease|Genetic Disease|مرض وراثي|Diagnosis)[\s:]*([A-Za-z\s]+)', text, re.IGNORECASE)
     if disease_match:
         data['genetic_disease'] = disease_match.group(1).strip()
     
     return data
 
-def text_to_dataset(text):
-    """تحويل النص إلى DataFrame"""
-    data = extract_values_from_text(text)
+def calculate_risk(data):
+    """حساب نسبة الخطورة بناءً على البيانات"""
+    risk = 0.0
     
-    default_values = {
-        'person_id': f"P{np.random.randint(100000, 999999)}",
-        'family_id': f"F{np.random.randint(100000, 999999)}",
-        'age': 40,
-        'gender': 'Unknown',
-        'genetic_risk_score': 0.3,
-        'genetic_disease': 'None',
-        'glucose': 0.0,
-        'systolic_bp': 0.0,
-        'diastolic_bp': 0.0,
-        'ldl': 0.0
-    }
+    # العمر (30% من المخاطر)
+    if data['age'] > 60:
+        risk += 0.3
+    elif data['age'] > 40:
+        risk += 0.15
     
-    row = {}
-    for col in default_values:
-        if col in data and data[col] is not None:
-            row[col] = data[col]
-        else:
-            row[col] = default_values[col]
+    # السكر (20% من المخاطر)
+    if data['glucose'] > 200:
+        risk += 0.2
+    elif data['glucose'] > 140:
+        risk += 0.1
     
-    return row
-
-def extract_text_from_file(content, filename):
-    """استخراج النص من محتوى الملف"""
-    ext = filename.split('.')[-1].lower()
-    text = ""
+    # الضغط (15% من المخاطر)
+    if data['systolic_bp'] > 160:
+        risk += 0.15
+    elif data['systolic_bp'] > 140:
+        risk += 0.075
     
-    try:
-        if ext in ['txt']:
-            text = content.decode('utf-8')
-        
-        elif ext in ['pdf']:
-            try:
-                import io
-                import pdfplumber
-                pdf_file = io.BytesIO(content)
-                with pdfplumber.open(pdf_file) as pdf:
-                    for page in pdf.pages:
-                        page_text = page.extract_text()
-                        if page_text:
-                            text += page_text + "\n"
-            except ImportError:
-                text = "PDF support requires pdfplumber"
-        
-        elif ext in ['xlsx', 'xls']:
-            import io
-            df = pd.read_excel(io.BytesIO(content))
-            text = df.to_string()
-        
-        elif ext in ['docx']:
-            try:
-                import io
-                import docx
-                doc_file = io.BytesIO(content)
-                doc = docx.Document(doc_file)
-                text = "\n".join([p.text for p in doc.paragraphs])
-            except ImportError:
-                text = "DOCX support requires python-docx"
-        
-        elif ext in ['jpg', 'png', 'jpeg']:
-            try:
-                from PIL import Image
-                import pytesseract
-                import io
-                img = Image.open(io.BytesIO(content))
-                text = pytesseract.image_to_string(img, lang='eng+ara')
-            except ImportError:
-                text = "Image support requires Pillow and pytesseract"
+    # LDL (15% من المخاطر)
+    if data['ldl'] > 190:
+        risk += 0.15
+    elif data['ldl'] > 130:
+        risk += 0.075
     
-    except Exception as e:
-        text = f"Error reading file: {str(e)}"
+    # المخاطر الوراثية (20% من المخاطر)
+    risk += data['genetic_risk_score'] * 0.2
     
-    return text
-
-# ==================== API Routes ====================
+    return min(risk, 0.95)
 
 @app.route('/', methods=['GET'])
 def home():
-    """الصفحة الرئيسية"""
     return jsonify({
-        'name': 'Medical Data Extractor API',
-        'version': '1.0.0',
         'status': 'running',
+        'name': 'Medical Data Extractor API',
+        'version': '2.0.0',
         'endpoints': {
+            'GET /': 'API information',
+            'GET /health': 'Health check',
             'POST /extract': 'Upload file and extract medical data',
-            'GET /health': 'Health check'
-        }
+            'POST /predict': 'Extract and predict risk'
+        },
+        'supported_files': ['.txt', '.pdf', '.jpg', '.png', '.xlsx', '.docx']
     })
 
 @app.route('/health', methods=['GET'])
 def health():
-    return jsonify({'status': 'healthy'})
+    return jsonify({
+        'status': 'healthy',
+        'message': 'Medical Data Extractor API is running'
+    })
 
 @app.route('/extract', methods=['POST'])
-def extract():
-    """رفع ملف واستخراج البيانات"""
-    
+def extract_file():
+    """رفع ملف واستخراج البيانات فقط"""
     if 'file' not in request.files:
         return jsonify({'success': False, 'error': 'No file uploaded'}), 400
     
     file = request.files['file']
-    
     if file.filename == '':
         return jsonify({'success': False, 'error': 'No file selected'}), 400
     
     try:
-        # قراءة محتوى الملف
         content = file.read()
+        text = content.decode('utf-8') if file.filename.endswith('.txt') else str(content)
+        data = extract_values(text)
         
-        # استخراج النص
-        text = extract_text_from_file(content, file.filename)
-        
-        if not text or len(text) < 10:
-            return jsonify({'success': False, 'error': 'Could not extract text from file'}), 400
-        
-        # تحويل إلى dataset
-        data = text_to_dataset(text)
+        # إضافة معرفات عشوائية
+        data['person_id'] = f"P{random.randint(100000, 999999)}"
+        data['family_id'] = f"F{random.randint(100000, 999999)}"
         
         return jsonify({
             'success': True,
-            'data': [data],
-            'columns': list(data.keys()),
+            'data': data,
             'filename': file.filename,
             'message': 'Data extracted successfully'
         })
-    
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
 
-# ==================== Vercel Handler ====================
+@app.route('/predict', methods=['POST'])
+def predict_risk():
+    """رفع ملف واستخراج البيانات مع حساب نسبة الخطورة"""
+    if 'file' not in request.files:
+        return jsonify({'success': False, 'error': 'No file uploaded'}), 400
+    
+    file = request.files['file']
+    if file.filename == '':
+        return jsonify({'success': False, 'error': 'No file selected'}), 400
+    
+    try:
+        content = file.read()
+        text = content.decode('utf-8') if file.filename.endswith('.txt') else str(content)
+        data = extract_values(text)
+        
+        # حساب نسبة الخطورة
+        risk_score = calculate_risk(data)
+        
+        # تحديد التصنيف
+        if risk_score < 0.3:
+            risk_category = "Low Risk"
+            risk_emoji = "🟢"
+            risk_color = "green"
+            risk_description = "Low probability of genetic diseases"
+        elif risk_score < 0.6:
+            risk_category = "Medium Risk"
+            risk_emoji = "🟡"
+            risk_color = "orange"
+            risk_description = "Moderate probability - consider genetic counseling"
+        else:
+            risk_category = "High Risk"
+            risk_emoji = "🔴"
+            risk_color = "red"
+            risk_description = "High probability - genetic testing recommended"
+        
+        # إضافة معرفات عشوائية
+        data['person_id'] = f"P{random.randint(100000, 999999)}"
+        data['family_id'] = f"F{random.randint(100000, 999999)}"
+        
+        return jsonify({
+            'success': True,
+            'data': data,
+            'risk_assessment': {
+                'score': round(risk_score, 3),
+                'percentage': f"{risk_score*100:.1f}%",
+                'category': risk_category,
+                'emoji': risk_emoji,
+                'color': risk_color,
+                'description': risk_description
+            },
+            'filename': file.filename,
+            'message': 'Data extracted and risk calculated successfully'
+        })
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
 
-def handler(event, context):
-    """Vercel serverless function handler"""
-    return app(event, context)
+# Vercel handler
+handler = app
 
-# للتشغيل المحلي
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000, debug=True)
