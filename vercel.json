@@ -11,7 +11,10 @@
       "dest": "api.py"
     }
   ],
-  "env": {
-    "PYTHONPATH": "."
-  }
+  "builds": [
+    {
+      "src": "api.py",
+      "use": "@vercel/python"
+    }
+  ]
 }
